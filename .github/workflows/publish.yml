@@ -36,10 +36,27 @@ jobs:
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      - name: Publish to npm with provenance
+      - name: Publish to npm with provenance (unpublish if version exists)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          set -e
+          pkg=$(node -p "require('./package.json').name")
+          ver=$(node -p "require('./package.json').version")
+          spec="$pkg@$ver"
+          echo "Checking if $spec exists on npm..."
+          if npm view "$spec" >/dev/null 2>&1; then
+            echo "$spec exists — attempting to unpublish"
+            npm unpublish "$spec" --force || {
+              echo "npm unpublish failed; exiting"
+              exit 1
+            }
+            echo "Unpublished $spec"
+          else
+            echo "$spec does not exist on npm"
+          fi
+
+          echo "Publishing $spec with provenance"
           npm publish --provenance --access public
 
       - name: Bump version and push tag
