@@ -1,6 +1,6 @@
 {
   "name": "bizlin-chat",
-  "version": "0.0.1-a1",
+  "version": "0.0.1",
   "description": "zchat npm plugin (integrates backend and frontend)",
   "main": "backend/index.js",
   "files": [
