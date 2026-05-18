@@ -1,7 +1,7 @@
 {
   "name": "bizlin-chat",
-  "version": "0.0.1",
-  "description": "zchat npm plugin (integrates backend and frontend)",
+  "version": "0.0.1-a2",
+  "description": "Open-source WhatsApp Cloud API Team Inbox by Bizlin Technologies",
   "main": "backend/index.js",
   "bin": {
     "bizlin-chat": "bin/bizlin-chat.js"
@@ -17,8 +17,9 @@
   },
   "keywords": [
     "zchat",
-    "plugin",
-    "chat"
+    "whatsapp",
+    "team inbox",
+    "bizlin"
   ],
   "publishConfig": {
     "access": "public"
