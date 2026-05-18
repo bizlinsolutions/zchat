@@ -168,6 +168,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   }
 
   if (body.object === 'whatsapp_business_account') {
+    const account = await db.getWhatsAppAccount()
     try {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
@@ -185,7 +186,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                 // media.id is present — get downloadable url
                 if (media && media.id) {
                   try {
-                    const url = await whatsapp.getMediaUrl(media.id)
+                    const url = await whatsapp.getMediaUrl(account, media.id)
                     media_url = url
                   } catch (e) {
                     console.warn('failed to fetch media url', e?.message || e)
