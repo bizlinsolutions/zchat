@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "zchat npm plugin (integrates backend and frontend)",
   "main": "backend/index.js",
+  "bin": {
+    "bizlin-chat": "bin/bizlin-chat.js"
+  },
   "files": [
     "backend",
     "frontend"
