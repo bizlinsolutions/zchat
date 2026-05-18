@@ -45,6 +45,7 @@ const backendEnv = Object.assign({}, process.env, {
 
 // env for frontend (Next.js accepts -p flag; we'll pass it as arg)
 const frontendEnv = Object.assign({}, process.env)
+frontendEnv.NEXT_PUBLIC_BACKEND_URL = `http://localhost:${backendPort}`
 
 // Ensure data dir exists for sqlite (the backend will also create if needed)
 try { require('fs').mkdirSync(path.join(process.cwd(), 'data'), { recursive: true }) } catch (e) {}
