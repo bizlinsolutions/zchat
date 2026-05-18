@@ -177,7 +177,7 @@ if (DB_CLIENT === 'postgres' || (process.env.DATABASE_URL || '').startsWith('pos
   }
 
   async function getWhatsAppAccount() {
-    const rows = await all('SELECT phone_id as phoneId, token, api_version as apiVersion FROM whatsapp_accounts LIMIT 1')
+    const rows = await all('SELECT phone_id, token, api_version FROM whatsapp_accounts LIMIT 1')
     return rows && rows[0]
   }
 
