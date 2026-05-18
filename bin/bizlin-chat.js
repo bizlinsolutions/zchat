@@ -17,6 +17,7 @@ function parseArgs() {
     const a = args[i]
     if (a === '--port' && args[i+1]) { out.port = parseInt(args[i+1], 10); i++ }
     else if (a === '--db' && args[i+1]) { out.db = args[i+1]; i++ }
+    else if (a === '--dbname' && args[i+1]) { out.dbname = args[i+1]; i++ }
     else if (a === '--help' || a === '-h') {
       console.log('Usage: bizlin-chat [--port <port>] [--db sqlite|postgres]')
       process.exit(0)
@@ -35,10 +36,11 @@ console.log(`Starting bizlin-chat (port=${backendPort}, db=${dbType})`)
 const procs = []
 
 // env for backend
+const dbName = opts.dbname || 'bizlin_chat'
 const backendEnv = Object.assign({}, process.env, {
   PORT: String(backendPort),
   DB_CLIENT: dbType,
-  DATABASE_URL: dbType === 'sqlite' ? `sqlite:${path.join(process.cwd(), 'data', 'bizchat.sqlite')}` : process.env.DATABASE_URL || ''
+  DATABASE_URL: dbType === 'sqlite' ? `sqlite:${path.join(process.cwd(), 'data', dbName + '.sqlite')}` : (process.env.DATABASE_URL || `postgresql://postgres:postgres@localhost:5432/${dbName}`)
 })
 
 // env for frontend (Next.js accepts -p flag; we'll pass it as arg)

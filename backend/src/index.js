@@ -10,6 +10,7 @@ const crypto = require('crypto')
 const app = express()
 app.use(cors())
 app.use(express.json())
+const bcrypt = require('bcryptjs')
 
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello from backend' })
@@ -22,6 +23,42 @@ app.get('/api/messages', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'failed to load messages' })
+  }
+})
+
+// Setup endpoints
+app.get('/api/setup/status', async (req, res) => {
+  try {
+    const cnt = await db.getAdminCount()
+    res.json({ setup: !!cnt })
+  } catch (err) {
+    console.error('setup status error', err)
+    res.status(500).json({ error: 'failed to check setup status' })
+  }
+})
+
+app.post('/api/setup/create-admin', async (req, res) => {
+  try {
+    const { username, password, name, email } = req.body
+    if (!username || !password) return res.status(400).json({ error: 'username and password required' })
+    const hash = bcrypt.hashSync(password, 10)
+    await db.createAdmin({ username, password_hash: hash, name, email })
+    res.status(201).json({ ok: true })
+  } catch (err) {
+    console.error('create admin error', err)
+    res.status(500).json({ error: 'failed to create admin' })
+  }
+})
+
+app.post('/api/setup/whatsapp', async (req, res) => {
+  try {
+    const { phone_id, token, api_version } = req.body
+    if (!phone_id || !token) return res.status(400).json({ error: 'phone_id and token required' })
+    await db.saveWhatsAppAccount({ phone_id, token, api_version })
+    res.status(201).json({ ok: true })
+  } catch (err) {
+    console.error('save whatsapp account error', err)
+    res.status(500).json({ error: 'failed to save whatsapp account' })
   }
 })
 
@@ -44,7 +81,8 @@ app.post('/api/send', async (req, res) => {
   const { to, text } = req.body
   if (!to || !text) return res.status(400).json({ error: 'to and text are required' })
   try {
-    const resp = await whatsapp.sendText(to, text)
+    const account = await db.getWhatsAppAccount()
+    const resp = await whatsapp.sendText(account, to, text)
     const waMessageId = resp && resp.messages && resp.messages[0] && resp.messages[0].id
     const message = { id: waMessageId || uuidv4(), text, sender: 'us', ts: Date.now(), wa_id: to, direction: 'outbound', type: 'text' }
     await db.addMessage(message)
@@ -53,6 +91,40 @@ app.post('/api/send', async (req, res) => {
   } catch (err) {
     console.error('send failed', err?.response?.data || err.message || err)
     res.status(500).json({ error: 'failed to send message' })
+  }
+})
+
+app.post('/api/sendMedia', async (req, res) => {
+  const { to, mediaUrl, mediaType } = req.body
+  if (!to || !mediaUrl) return res.status(400).json({ error: 'to and mediaUrl are required' })
+  try {
+    const account = await db.getWhatsAppAccount()
+    const resp = await whatsapp.sendMedia(account, to, mediaUrl, mediaType || 'image')
+    const waMessageId = resp && resp.messages && resp.messages[0] && resp.messages[0].id
+    const message = { id: waMessageId || uuidv4(), text: mediaUrl, sender: 'us', ts: Date.now(), wa_id: to, direction: 'outbound', type: mediaType || 'image', media_url: mediaUrl }
+    await db.addMessage(message)
+    io.emit('message', message)
+    res.status(200).json(message)
+  } catch (err) {
+    console.error('sendMedia failed', err?.response?.data || err.message || err)
+    res.status(500).json({ error: 'failed to send media' })
+  }
+})
+
+app.post('/api/sendTemplate', async (req, res) => {
+  const { to, templateName, language, components } = req.body
+  if (!to || !templateName) return res.status(400).json({ error: 'to and templateName are required' })
+  try {
+    const account = await db.getWhatsAppAccount()
+    const resp = await whatsapp.sendTemplate(account, to, templateName, language || 'en_US', components || [])
+    const waMessageId = resp && resp.messages && resp.messages[0] && resp.messages[0].id
+    const message = { id: waMessageId || uuidv4(), text: `[template:${templateName}]`, sender: 'us', ts: Date.now(), wa_id: to, direction: 'outbound', type: 'template' }
+    await db.addMessage(message)
+    io.emit('message', message)
+    res.status(200).json(message)
+  } catch (err) {
+    console.error('sendTemplate failed', err?.response?.data || err.message || err)
+    res.status(500).json({ error: 'failed to send template' })
   }
 })
 

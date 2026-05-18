@@ -9,20 +9,32 @@ export default function Home() {
   const [templateName, setTemplateName] = useState('')
   const [templateLang, setTemplateLang] = useState('en_US')
   const socketRef = useRef(null)
+  const [setupNeeded, setSetupNeeded] = useState(false)
+  const [adminForm, setAdminForm] = useState({ username: '', password: '', name: '', email: '' })
+  const [waForm, setWaForm] = useState({ phone_id: '', token: '', api_version: 'v15.0' })
+  const [setupStep, setSetupStep] = useState(0)
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/messages')
+    // check setup status first
+    fetch('/api/setup/status')
       .then((r) => r.json())
-      .then((d) => setMessages(d))
-      .catch(() => setMessages([]))
-
-    socketRef.current = io('http://localhost:4000')
-    socketRef.current.on('message', (msg) => {
-      setMessages((m) => [...m, msg])
-    })
+      .then((d) => {
+        if (d && d.setup) {
+          setSetupNeeded(false)
+          // load messages and connect socket
+          fetch('/api/messages')
+            .then((r) => r.json())
+            .then((msgs) => setMessages(msgs)).catch(() => setMessages([]))
+          socketRef.current = io('/')
+          socketRef.current.on('message', (msg) => setMessages((m) => [...m, msg]))
+        } else {
+          setSetupNeeded(true)
+          setSetupStep(0)
+        }
+      })
 
     return () => {
-      socketRef.current.disconnect()
+      if (socketRef.current) socketRef.current.disconnect()
     }
   }, [])
 
@@ -43,6 +55,29 @@ export default function Home() {
       })
     }
     setText('')
+  }
+
+  const createAdmin = async () => {
+    const resp = await fetch('/api/setup/create-admin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminForm)
+    })
+    if (resp.ok) {
+      setSetupStep(1)
+    } else {
+      alert('Failed to create admin')
+    }
+  }
+
+  const saveWa = async () => {
+    const resp = await fetch('/api/setup/whatsapp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(waForm)
+    })
+    if (resp.ok) {
+      // reload page to initialize socket/messages
+      window.location.reload()
+    } else {
+      alert('Failed to save WhatsApp account')
+    }
   }
 
   const sendMedia = async () => {
@@ -69,7 +104,31 @@ export default function Home() {
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: 24 }}>
       <h1>WhatsApp Team Inbox (Frontend)</h1>
       <div style={{ maxWidth: 720 }}>
-        <div style={{ border: '1px solid #ddd', padding: 12, minHeight: 200 }}>
+        {setupNeeded ? (
+          <div>
+            {setupStep === 0 ? (
+              <div>
+                <h2>Initial setup — create admin</h2>
+                <input placeholder="username" value={adminForm.username} onChange={(e)=>setAdminForm({...adminForm, username: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <input placeholder="password" type="password" value={adminForm.password} onChange={(e)=>setAdminForm({...adminForm, password: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <input placeholder="name" value={adminForm.name} onChange={(e)=>setAdminForm({...adminForm, name: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <input placeholder="email" value={adminForm.email} onChange={(e)=>setAdminForm({...adminForm, email: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <button onClick={createAdmin} style={{padding:'8px 12px'}}>Create Admin</button>
+              </div>
+            ) : (
+              <div>
+                <h2>Configure WhatsApp Cloud API</h2>
+                <input placeholder="phone_id" value={waForm.phone_id} onChange={(e)=>setWaForm({...waForm, phone_id: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <input placeholder="token" value={waForm.token} onChange={(e)=>setWaForm({...waForm, token: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <input placeholder="api_version" value={waForm.api_version} onChange={(e)=>setWaForm({...waForm, api_version: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
+                <button onClick={saveWa} style={{padding:'8px 12px'}}>Save WhatsApp Account</button>
+              </div>
+            )}
+          </div>
+        ) : (
+        
+        <div>
+          <div style={{ border: '1px solid #ddd', padding: 12, minHeight: 200 }}>
           {messages.map((m) => (
             <div key={m.id} style={{ padding: 8, borderBottom: '1px solid #eee' }}>
               <div style={{ fontSize: 12, color: '#666' }}>{m.sender} • {new Date(m.ts).toLocaleTimeString()}</div>
@@ -92,6 +151,8 @@ export default function Home() {
           <input placeholder="lang" value={templateLang} onChange={(e) => setTemplateLang(e.target.value)} style={{ width: 100, padding: 8 }} />
           <button onClick={sendTemplate} style={{ padding: '8px 12px' }}>Send Template</button>
         </div>
+        </div>
+        )}
       </div>
     </main>
   )
