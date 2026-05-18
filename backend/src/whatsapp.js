@@ -49,3 +49,17 @@ async function getMediaUrl(account, mediaId) {
 }
 
 module.exports = { sendText, sendMedia, sendTemplate, getMediaUrl }
+
+async function testAccount({ phone_id, token, api_version }) {
+  const apiVersion = api_version || API_DEFAULT
+  if (!phone_id || !token) throw new Error('phone_id and token required')
+  const url = `https://graph.facebook.com/${apiVersion}/${phone_id}`
+  try {
+    const res = await axios.get(url, { params: { access_token: token } })
+    return { ok: true, body: res.data }
+  } catch (err) {
+    return { ok: false, error: err?.response?.data || err.message }
+  }
+}
+
+module.exports = { sendText, sendMedia, sendTemplate, getMediaUrl, testAccount }

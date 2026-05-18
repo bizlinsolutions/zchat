@@ -14,8 +14,9 @@ export default function Home() {
   const [waForm, setWaForm] = useState({ phone_id: '', token: '', api_version: 'v15.0' })
   const [setupStep, setSetupStep] = useState(0)
 
+  const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL) || 'http://localhost:4000'
+
   useEffect(() => {
-    const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL) || 'http://localhost:4000'
     // check setup status first
     fetch(BACKEND + '/api/setup/status')
       .then((r) => r.json())
@@ -122,7 +123,18 @@ export default function Home() {
                 <input placeholder="phone_id" value={waForm.phone_id} onChange={(e)=>setWaForm({...waForm, phone_id: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
                 <input placeholder="token" value={waForm.token} onChange={(e)=>setWaForm({...waForm, token: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
                 <input placeholder="api_version" value={waForm.api_version} onChange={(e)=>setWaForm({...waForm, api_version: e.target.value})} style={{padding:8, display:'block', marginBottom:8}} />
-                <button onClick={saveWa} style={{padding:'8px 12px'}}>Save WhatsApp Account</button>
+                <div style={{display:'flex', gap:8}}>
+                  <button onClick={async()=>{
+                    // test credentials
+                    try {
+                      const r = await fetch(BACKEND + '/api/setup/test-whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(waForm) })
+                      const j = await r.json()
+                      if (r.ok) alert('Credentials valid')
+                      else alert('Invalid credentials: ' + (j.error?.message || JSON.stringify(j.error)))
+                    } catch (e) { alert('Test failed: '+e.message) }
+                  }} style={{padding:'8px 12px'}}>Test</button>
+                  <button onClick={saveWa} style={{padding:'8px 12px'}}>Save WhatsApp Account</button>
+                </div>
               </div>
             )}
           </div>

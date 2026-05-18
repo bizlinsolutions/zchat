@@ -62,6 +62,19 @@ app.post('/api/setup/whatsapp', async (req, res) => {
   }
 })
 
+app.post('/api/setup/test-whatsapp', async (req, res) => {
+  try {
+    const { phone_id, token, api_version } = req.body
+    if (!phone_id || !token) return res.status(400).json({ error: 'phone_id and token required' })
+    const result = await whatsapp.testAccount({ phone_id, token, api_version })
+    if (result.ok) return res.json({ ok: true, info: result.body })
+    return res.status(400).json({ ok: false, error: result.error })
+  } catch (err) {
+    console.error('test whatsapp error', err)
+    res.status(500).json({ error: 'failed to test whatsapp account' })
+  }
+})
+
 app.post('/api/messages', async (req, res) => {
   try {
     const { text, sender } = req.body
