@@ -85,8 +85,6 @@ if (DB_CLIENT === 'postgres' || (process.env.DATABASE_URL || '').startsWith('pos
 
   module.exports = { init, getMessages, addMessage, updateMessageStatus, getAdminCount, createAdmin, saveWhatsAppAccount, getWhatsAppAccount, pool }
 
-  module.exports = { init, getMessages, addMessage, updateMessageStatus, pool }
-
 } else {
   // Default to sqlite
   const sqlite3 = require('sqlite3')
@@ -184,6 +182,4 @@ if (DB_CLIENT === 'postgres' || (process.env.DATABASE_URL || '').startsWith('pos
   }
 
   module.exports = { init, getMessages, addMessage, updateMessageStatus, getAdminCount, createAdmin, saveWhatsAppAccount, getWhatsAppAccount, db }
-
-  module.exports = { init, getMessages, addMessage, updateMessageStatus, db }
 }
