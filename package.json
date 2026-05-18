@@ -1,0 +1,28 @@
+{
+  "name": "zchat",
+  "version": "0.0.1",
+  "description": "zchat npm plugin (integrates backend and frontend)",
+  "main": "backend/index.js",
+  "files": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "start": "node backend/index.js",
+    "start:frontend": "node frontend/index.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "zchat",
+    "plugin",
+    "chat"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14"
+  }
+}
