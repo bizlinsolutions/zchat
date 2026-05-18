@@ -1,6 +1,6 @@
 {
   "name": "bizlin-chat",
-  "version": "0.0.1-a2",
+  "version": "0.0.1",
   "description": "Open-source WhatsApp Cloud API Team Inbox by Bizlin Technologies",
   "main": "backend/index.js",
   "bin": {
@@ -28,7 +28,7 @@
     "type": "git",
     "url": "https://github.com/bizlinsolutions/zchat.git"
   },
-  "author": "",
+  "author": "Bizlin Technologies",
   "license": "MIT",
   "engines": {
     "node": ">=14"
