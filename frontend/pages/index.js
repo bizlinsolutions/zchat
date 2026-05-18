@@ -15,17 +15,18 @@ export default function Home() {
   const [setupStep, setSetupStep] = useState(0)
 
   useEffect(() => {
+    const BACKEND = (process.env.NEXT_PUBLIC_BACKEND_URL) || 'http://localhost:4000'
     // check setup status first
-    fetch('/api/setup/status')
+    fetch(BACKEND + '/api/setup/status')
       .then((r) => r.json())
       .then((d) => {
         if (d && d.setup) {
           setSetupNeeded(false)
           // load messages and connect socket
-          fetch('/api/messages')
+          fetch(BACKEND + '/api/messages')
             .then((r) => r.json())
             .then((msgs) => setMessages(msgs)).catch(() => setMessages([]))
-          socketRef.current = io('/')
+          socketRef.current = io(BACKEND)
           socketRef.current.on('message', (msg) => setMessages((m) => [...m, msg]))
         } else {
           setSetupNeeded(true)
