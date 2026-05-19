@@ -21,13 +21,14 @@ function start(name, cmd, args, env) {
 
 function parseArgs() {
   const args = process.argv.slice(2)
-  const out = { port: 1994, db: 'sqlite' }
+  const out = { port: 1994, db: 'sqlite', extra: [] }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (a === '--port' && args[i+1]) { out.port = parseInt(args[i+1], 10); i++ }
     else if (a === '--db' && args[i+1]) { out.db = args[i+1]; i++ }
     else if (a === '--dbname' && args[i+1]) { out.dbname = args[i+1]; i++ }
     else if (a === '--help' || a === '-h') { out.action = 'help' }
+    else if (['start','stop','restart','run','logs','help'].includes(a)) { out.action = a }
     else out.extra.push(a)
   }
   return out

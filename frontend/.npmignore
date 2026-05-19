@@ -1,0 +1,56 @@
+# Source files (not needed in published package, already in .next)
+app/
+components/
+context/
+styles/
+*.tsx
+*.ts
+*.jsx
+*.js
+
+# Config files
+tsconfig.json
+postcss.config.js
+tailwind.config.js
+next.config.js
+.eslintrc.json
+
+# Environment
+.env
+.env.local
+.env.example
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Development
+.next/standalone/
+.next/cache/
+
+# Documentation
+TYPESCRIPT_MIGRATION.md
+
+# Version control
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Misc
+.turbo/

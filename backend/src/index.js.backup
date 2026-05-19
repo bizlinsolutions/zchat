@@ -1,3 +1,159 @@
+// Contacts API
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const contacts = await db.getContacts()
+    res.json(contacts)
+  } catch (err) {
+    console.error('get contacts error', err)
+    res.status(500).json({ error: 'failed to get contacts' })
+  }
+})
+
+app.post('/api/contacts', async (req, res) => {
+  try {
+    const { wa_id, name, phone, email } = req.body
+    if (!wa_id) return res.status(400).json({ error: 'wa_id required' })
+    const contact = await db.addContact({ wa_id, name, phone, email })
+    res.status(201).json(contact)
+  } catch (err) {
+    console.error('add contact error', err)
+    res.status(500).json({ error: 'failed to add contact' })
+  }
+})
+
+app.get('/api/contacts/:wa_id', async (req, res) => {
+  try {
+    const contact = await db.getContactByWaId(req.params.wa_id)
+    if (!contact) return res.status(404).json({ error: 'not found' })
+    res.json(contact)
+  } catch (err) {
+    console.error('get contact error', err)
+    res.status(500).json({ error: 'failed to get contact' })
+  }
+})
+
+// Agent assignment API
+app.post('/api/assign', async (req, res) => {
+  try {
+    const { message_id, agent_id } = req.body
+    if (!message_id || !agent_id) return res.status(400).json({ error: 'message_id and agent_id required' })
+    const assignment = await db.assignAgent({ message_id, agent_id })
+    res.status(201).json(assignment)
+  } catch (err) {
+    console.error('assign agent error', err)
+    res.status(500).json({ error: 'failed to assign agent' })
+  }
+})
+
+app.get('/api/assignments/agent/:agent_id', async (req, res) => {
+  try {
+    const assignments = await db.getAssignmentsByAgent(req.params.agent_id)
+    res.json(assignments)
+  } catch (err) {
+    console.error('get assignments by agent error', err)
+    res.status(500).json({ error: 'failed to get assignments' })
+  }
+})
+
+app.get('/api/assignments/message/:message_id', async (req, res) => {
+  try {
+    const assignments = await db.getAssignmentsByMessage(req.params.message_id)
+    res.json(assignments)
+  } catch (err) {
+    console.error('get assignments by message error', err)
+    res.status(500).json({ error: 'failed to get assignments' })
+  }
+})
+
+// Analytics endpoints
+app.get('/api/analytics/messages-count', async (req, res) => {
+  try {
+    const from = req.query.from ? parseInt(req.query.from, 10) : null
+    const to = req.query.to ? parseInt(req.query.to, 10) : null
+    const cnt = await db.getMessagesCount(from, to)
+    res.json({ count: cnt })
+  } catch (err) {
+    console.error('analytics messages-count error', err)
+    res.status(500).json({ error: 'failed to compute messages count' })
+  }
+})
+
+app.get('/api/analytics/agent-stats', async (req, res) => {
+  try {
+    const from = req.query.from ? parseInt(req.query.from, 10) : null
+    const to = req.query.to ? parseInt(req.query.to, 10) : null
+    // gather messages in range
+    const msgs = await db.getMessagesBetween(from, to)
+    // build map of agent stats
+    const assignments = {}
+    for (const m of msgs) {
+      const assigns = await db.getAssignmentsByMessage(m.id)
+      for (const a of assigns) {
+        const agentId = a.agent_id
+        if (!assignments[agentId]) assignments[agentId] = { agent_id: agentId, inbound: 0, outbound: 0, responseTimes: [] }
+        if (m.direction === 'inbound') assignments[agentId].inbound++
+        if (m.direction === 'outbound') assignments[agentId].outbound++
+      }
+    }
+    // compute approximate response times: for each inbound message, find earliest outbound to same wa_id after ts
+    const inboundMsgs = msgs.filter(m => m.direction === 'inbound')
+    const outboundMsgs = msgs.filter(m => m.direction === 'outbound').sort((a,b)=>a.ts-b.ts)
+    for (const inMsg of inboundMsgs) {
+      const assigns = await db.getAssignmentsByMessage(inMsg.id)
+      const candidate = outboundMsgs.find(o => o.wa_id === inMsg.wa_id && o.ts > inMsg.ts)
+      if (!candidate) continue
+      for (const a of assigns) {
+        const ag = assignments[a.agent_id]
+        if (ag) ag.responseTimes.push(candidate.ts - inMsg.ts)
+      }
+    }
+    const result = Object.values(assignments).map(s => ({ agent_id: s.agent_id, inbound: s.inbound, outbound: s.outbound, avg_response_ms: s.responseTimes.length ? Math.round(s.responseTimes.reduce((a,b)=>a+b,0)/s.responseTimes.length) : null }))
+    res.json(result)
+  } catch (err) {
+    console.error('analytics agent-stats error', err)
+    res.status(500).json({ error: 'failed to compute agent stats' })
+  }
+})
+
+app.get('/api/analytics/response-times', async (req, res) => {
+  try {
+    const from = req.query.from ? parseInt(req.query.from, 10) : null
+    const to = req.query.to ? parseInt(req.query.to, 10) : null
+    const msgs = await db.getMessagesBetween(from, to)
+    const inboundMsgs = msgs.filter(m => m.direction === 'inbound')
+    const outboundMsgs = msgs.filter(m => m.direction === 'outbound').sort((a,b)=>a.ts-b.ts)
+    const diffs = []
+    for (const inMsg of inboundMsgs) {
+      const candidate = outboundMsgs.find(o => o.wa_id === inMsg.wa_id && o.ts > inMsg.ts)
+      if (candidate) diffs.push(candidate.ts - inMsg.ts)
+    }
+    const avg = diffs.length ? Math.round(diffs.reduce((a,b)=>a+b,0)/diffs.length) : null
+    res.json({ avg_response_ms: avg, samples: diffs.length })
+  } catch (err) {
+    console.error('analytics response-times error', err)
+    res.status(500).json({ error: 'failed to compute response times' })
+  }
+})
+
+app.get('/api/analytics/export', async (req, res) => {
+  try {
+    const from = req.query.from ? parseInt(req.query.from, 10) : null
+    const to = req.query.to ? parseInt(req.query.to, 10) : null
+    const format = (req.query.format || 'csv').toLowerCase()
+    const msgs = await db.getMessagesBetween(from, to)
+    if (format === 'csv') {
+      const header = 'id,text,sender,ts,wa_id,direction,type,media_url,status\n'
+      const rows = msgs.map(m => [m.id, (`"${(m.text||'').replace(/"/g,'""')}"`), m.sender, m.ts, m.wa_id, m.direction, m.type, m.media_url, m.status].join(',')).join('\n')
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', 'attachment; filename="messages.csv"')
+      return res.send(header + rows)
+    }
+    res.json(msgs)
+  } catch (err) {
+    console.error('analytics export error', err)
+    res.status(500).json({ error: 'failed to export messages' })
+  }
+})
 const express = require('express')
 const cors = require('cors')
 const http = require('http')
@@ -227,7 +383,15 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             for (const st of value.statuses) {
               const msgId = st.id
               const status = st.status
-              if (msgId) await db.updateMessageStatus(msgId, status)
+              if (msgId) {
+                await db.updateMessageStatus(msgId, status)
+                try {
+                  io.emit('status', { id: msgId, status })
+                } catch (e) {
+                  // io may not be ready in some edge cases
+                  console.warn('failed to emit status', e?.message || e)
+                }
+              }
             }
           }
         }

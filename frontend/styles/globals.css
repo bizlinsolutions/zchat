@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #__next {
+  height: 100%;
+}
+
+.message-list {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}
+
+:root{
+  --color-primary: #0b3d91;
+  --color-primary-600: #0a357a;
+  --color-primary-700: #082b63;
+}
+
+body{
+  background-color: #f8fafc; /* light gray */
+  color: #0f172a;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* Base button styles using primary */
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-600;
+  }
+}

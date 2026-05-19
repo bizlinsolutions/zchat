@@ -1,3 +1,45 @@
+# Node
 node_modules/
-.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Data and runtime artifacts
+data/
+*.sqlite
+*.sqlite3
+.bizlin-chat.pid
+
+# IDE
+.vscode/
+.idea/
+
+# Coverage
+coverage/
+
+# Ignore local installs of linked package
+node_modules/**/node_modules
+
+# Misc
+*.tgz
+

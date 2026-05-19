@@ -1,0 +1,335 @@
+const fs = require('fs')
+const path = require('path')
+
+const DB_CLIENT = (process.env.DB_CLIENT || '').toLowerCase()
+
+if (DB_CLIENT === 'postgres' || (process.env.DATABASE_URL || '').startsWith('postgres')) {
+  const { Pool } = require('pg')
+  const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/bizchat'
+  const pool = new Pool({ connectionString: DATABASE_URL })
+
+  async function init() {
+    const sql = `
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      sender TEXT,
+      ts BIGINT NOT NULL,
+      wa_id TEXT,
+      direction TEXT,
+      type TEXT,
+      media_url TEXT,
+      status TEXT
+    );
+    `
+    await pool.query(sql)
+    // accounts table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        role TEXT DEFAULT 'admin'
+      );
+    `)
+    // whatsapp accounts
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_accounts (
+        id SERIAL PRIMARY KEY,
+        phone_id TEXT,
+        token TEXT,
+        api_version TEXT
+      );
+      `)
+      // contacts table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS contacts (
+          id SERIAL PRIMARY KEY,
+          wa_id TEXT UNIQUE NOT NULL,
+          name TEXT,
+          phone TEXT,
+          email TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+      `)
+      // agent assignment table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS agent_assignments (
+          id SERIAL PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          agent_id INTEGER NOT NULL,
+          assigned_at TIMESTAMP DEFAULT NOW(),
+          FOREIGN KEY (message_id) REFERENCES messages(id),
+          FOREIGN KEY (agent_id) REFERENCES accounts(id)
+        );
+      `)
+    }
+  // Contacts CRUD
+  async function addContact({ wa_id, name, phone, email }) {
+    const sql = 'INSERT INTO contacts(wa_id, name, phone, email) VALUES($1, $2, $3, $4) ON CONFLICT (wa_id) DO UPDATE SET name=EXCLUDED.name, phone=EXCLUDED.phone, email=EXCLUDED.email RETURNING *'
+    const res = await pool.query(sql, [wa_id, name, phone, email])
+    return res.rows[0]
+  }
+  async function getContacts() {
+    const res = await pool.query('SELECT * FROM contacts ORDER BY created_at DESC')
+    return res.rows
+  }
+  async function getContactByWaId(wa_id) {
+    const res = await pool.query('SELECT * FROM contacts WHERE wa_id = $1', [wa_id])
+    return res.rows[0]
+  }
+  // Agent assignment
+  async function assignAgent({ message_id, agent_id }) {
+    const sql = 'INSERT INTO agent_assignments(message_id, agent_id) VALUES($1, $2) RETURNING *'
+    const res = await pool.query(sql, [message_id, agent_id])
+    return res.rows[0]
+  }
+  async function getAssignmentsByAgent(agent_id) {
+    const res = await pool.query('SELECT * FROM agent_assignments WHERE agent_id = $1', [agent_id])
+    return res.rows
+  }
+  async function getAssignmentsByMessage(message_id) {
+    const res = await pool.query('SELECT * FROM agent_assignments WHERE message_id = $1', [message_id])
+    return res.rows
+  }
+
+  async function getMessages() {
+    const res = await pool.query('SELECT id, text, sender, ts, wa_id, direction, type, media_url FROM messages ORDER BY ts ASC')
+    return res.rows
+  }
+
+  async function addMessage(message) {
+    const { id, text, sender, ts, wa_id, direction, type, media_url, status } = message
+    const sql = 'INSERT INTO messages(id, text, sender, ts, wa_id, direction, type, media_url, status) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)'
+    await pool.query(sql, [id, text, sender, ts, wa_id || null, direction || null, type || null, media_url || null, status || null])
+    return message
+  }
+
+  async function updateMessageStatus(id, status) {
+    const sql = 'UPDATE messages SET status = $1 WHERE id = $2'
+    await pool.query(sql, [status, id])
+  }
+
+  async function getAdminCount() {
+    const res = await pool.query('SELECT COUNT(*)::int AS cnt FROM accounts')
+    return res.rows[0] && res.rows[0].cnt
+  }
+
+  async function createAdmin({ username, password_hash, name, email }) {
+    const sql = 'INSERT INTO accounts(username, password_hash, name, email, role) VALUES($1,$2,$3,$4,$5)'
+    await pool.query(sql, [username, password_hash, name || null, email || null, 'admin'])
+  }
+
+  async function saveWhatsAppAccount({ phone_id, token, api_version }) {
+    await pool.query('DELETE FROM whatsapp_accounts')
+    const sql = 'INSERT INTO whatsapp_accounts(phone_id, token, api_version) VALUES($1,$2,$3)'
+    await pool.query(sql, [phone_id || null, token || null, api_version || null])
+  }
+
+  async function getWhatsAppAccount() {
+    const res = await pool.query('SELECT phone_id, token, api_version FROM whatsapp_accounts LIMIT 1')
+    return res.rows[0]
+  }
+
+  async function getMessagesBetween(tsFrom, tsTo) {
+    let sql = 'SELECT id, text, sender, ts, wa_id, direction, type, media_url, status FROM messages'
+    const params = []
+    if (tsFrom || tsTo) {
+      const where = []
+      if (tsFrom) { params.push(tsFrom); where.push(`ts >= $${params.length}`) }
+      if (tsTo) { params.push(tsTo); where.push(`ts <= $${params.length}`) }
+      sql += ' WHERE ' + where.join(' AND ')
+    }
+    sql += ' ORDER BY ts ASC'
+    const res = await pool.query(sql, params)
+    return res.rows
+  }
+
+  async function getMessagesCount(tsFrom, tsTo) {
+    let sql = 'SELECT COUNT(*)::int AS cnt FROM messages'
+    const params = []
+    if (tsFrom || tsTo) {
+      const where = []
+      if (tsFrom) { params.push(tsFrom); where.push(`ts >= $${params.length}`) }
+      if (tsTo) { params.push(tsTo); where.push(`ts <= $${params.length}`) }
+      sql += ' WHERE ' + where.join(' AND ')
+    }
+    const res = await pool.query(sql, params)
+    return res.rows[0] && res.rows[0].cnt
+  }
+
+  module.exports = { init, getMessages, addMessage, updateMessageStatus, getAdminCount, createAdmin, saveWhatsAppAccount, getWhatsAppAccount, addContact, getContacts, getContactByWaId, assignAgent, getAssignmentsByAgent, getAssignmentsByMessage, pool }
+
+} else {
+  // Default to sqlite
+  const sqlite3 = require('sqlite3')
+  const dbPath = (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('sqlite:'))
+    ? process.env.DATABASE_URL.replace(/^sqlite:/, '')
+    : path.join(process.cwd(), 'data', 'bizchat.sqlite')
+
+  const dir = path.dirname(dbPath)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+  const db = new sqlite3.Database(dbPath)
+
+  function run(sql, params=[]) {
+    return new Promise((resolve, reject) => db.run(sql, params, function(err) {
+      if (err) reject(err); else resolve(this)
+    }))
+  }
+
+  function all(sql, params=[]) {
+    return new Promise((resolve, reject) => db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows)))
+  }
+
+  async function init() {
+    const sql = `
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      sender TEXT,
+      ts BIGINT NOT NULL,
+      wa_id TEXT,
+      direction TEXT,
+      type TEXT,
+      media_url TEXT,
+      status TEXT
+    );
+    `
+    await run(sql)
+    // accounts table
+    await run(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        role TEXT DEFAULT 'admin'
+      );
+    `)
+    await run(`
+      CREATE TABLE IF NOT EXISTS whatsapp_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone_id TEXT,
+        token TEXT,
+        api_version TEXT
+      );
+    `)
+    // contacts table
+    await run(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wa_id TEXT UNIQUE NOT NULL,
+        name TEXT,
+        phone TEXT,
+        email TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `)
+    // agent assignment table
+    await run(`
+      CREATE TABLE IF NOT EXISTS agent_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id TEXT NOT NULL,
+        agent_id INTEGER NOT NULL,
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES messages(id),
+        FOREIGN KEY (agent_id) REFERENCES accounts(id)
+      );
+    `)
+  }
+  // Contacts CRUD
+  async function addContact({ wa_id, name, phone, email }) {
+    const sql = 'INSERT INTO contacts(wa_id, name, phone, email) VALUES(?, ?, ?, ?) ON CONFLICT(wa_id) DO UPDATE SET name=excluded.name, phone=excluded.phone, email=excluded.email'
+    await run(sql, [wa_id, name, phone, email])
+    return getContactByWaId(wa_id)
+  }
+  async function getContacts() {
+    return all('SELECT * FROM contacts ORDER BY created_at DESC')
+  }
+  async function getContactByWaId(wa_id) {
+    const rows = await all('SELECT * FROM contacts WHERE wa_id = ?', [wa_id])
+    return rows && rows[0]
+  }
+  // Agent assignment
+  async function assignAgent({ message_id, agent_id }) {
+    const sql = 'INSERT INTO agent_assignments(message_id, agent_id) VALUES(?, ?)' 
+    await run(sql, [message_id, agent_id])
+    return getAssignmentsByMessage(message_id)
+  }
+  async function getAssignmentsByAgent(agent_id) {
+    return all('SELECT * FROM agent_assignments WHERE agent_id = ?', [agent_id])
+  }
+  async function getAssignmentsByMessage(message_id) {
+    return all('SELECT * FROM agent_assignments WHERE message_id = ?', [message_id])
+  }
+
+  async function getMessages() {
+    const rows = await all('SELECT id, text, sender, ts, wa_id, direction, type, media_url FROM messages ORDER BY ts ASC')
+    return rows
+  }
+
+  async function addMessage(message) {
+    const { id, text, sender, ts, wa_id, direction, type, media_url, status } = message
+    const sql = 'INSERT OR REPLACE INTO messages(id, text, sender, ts, wa_id, direction, type, media_url, status) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    await run(sql, [id, text, sender, ts, wa_id || null, direction || null, type || null, media_url || null, status || null])
+    return message
+  }
+
+  async function updateMessageStatus(id, status) {
+    const sql = 'UPDATE messages SET status = ? WHERE id = ?'
+    await run(sql, [status, id])
+  }
+
+  async function getAdminCount() {
+    const rows = await all('SELECT COUNT(*) as cnt FROM accounts')
+    return rows && rows[0] && rows[0].cnt
+  }
+
+  async function createAdmin({ username, password_hash, name, email }) {
+    const sql = 'INSERT INTO accounts(username, password_hash, name, email, role) VALUES(?, ?, ?, ?, ?)'
+    await run(sql, [username, password_hash, name || null, email || null, 'admin'])
+  }
+
+  async function saveWhatsAppAccount({ phone_id, token, api_version }) {
+    await run('DELETE FROM whatsapp_accounts')
+    const sql = 'INSERT INTO whatsapp_accounts(phone_id, token, api_version) VALUES(?, ?, ?)'
+    await run(sql, [phone_id || null, token || null, api_version || null])
+  }
+
+  async function getWhatsAppAccount() {
+    const rows = await all('SELECT phone_id, token, api_version FROM whatsapp_accounts LIMIT 1')
+    return rows && rows[0]
+  }
+
+  async function getMessagesBetween(tsFrom, tsTo) {
+    let sql = 'SELECT id, text, sender, ts, wa_id, direction, type, media_url, status FROM messages'
+    const params = []
+    if (tsFrom || tsTo) {
+      const where = []
+      if (tsFrom) { params.push(tsFrom); where.push('ts >= ?') }
+      if (tsTo) { params.push(tsTo); where.push('ts <= ?') }
+      sql += ' WHERE ' + where.join(' AND ')
+    }
+    sql += ' ORDER BY ts ASC'
+    return all(sql, params)
+  }
+
+  async function getMessagesCount(tsFrom, tsTo) {
+    let sql = 'SELECT COUNT(*) as cnt FROM messages'
+    const params = []
+    if (tsFrom || tsTo) {
+      const where = []
+      if (tsFrom) { params.push(tsFrom); where.push('ts >= ?') }
+      if (tsTo) { params.push(tsTo); where.push('ts <= ?') }
+      sql += ' WHERE ' + where.join(' AND ')
+    }
+    const rows = await all(sql, params)
+    return rows && rows[0] && rows[0].cnt
+  }
+
+  module.exports = { init, getMessages, addMessage, updateMessageStatus, getAdminCount, createAdmin, saveWhatsAppAccount, getWhatsAppAccount, addContact, getContacts, getContactByWaId, assignAgent, getAssignmentsByAgent, getAssignmentsByMessage, getMessagesBetween, getMessagesCount, db }
+}

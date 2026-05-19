@@ -1,0 +1,50 @@
+# Source files (not needed in published package)
+src/
+scripts/
+
+# Development files
+*.ts
+!dist/**/*.d.ts
+
+# Config files
+tsconfig.json
+.env
+.env.example
+
+# Dependencies (not needed, install from package.json)
+node_modules/
+
+# Build files
+logs/
+
+# Testing
+*.test.ts
+*.spec.ts
+
+# Documentation
+STRUCTURE.md
+BEFORE_AFTER.md
+QUICK_REFERENCE.md
+TYPESCRIPT_MIGRATION.md
+IMPLEMENTATION.md
+
+# Version control
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+
+# Backup files
+*.backup
+*.bak
